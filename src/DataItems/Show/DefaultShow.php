@@ -65,11 +65,13 @@ class DefaultShow extends ShowBase
     {
         $this->setChildBlockBox($row);
 
+        $this->setComboBox($row);
+
         $this->setDocumentBox($row);
 
         $this->setRevisionBox($row);
  
-        $this->setCommentBox($row);
+        //$this->setCommentBox($row);
     }
     
     /**
@@ -544,6 +546,7 @@ EOT;
         if ($this->modal) {
             return [];
         }
+        
         return $this->custom_value->getDocuments();
     }
     
@@ -574,7 +577,7 @@ EOT;
                 ->plain()
                 ->setWidth(8, 3);
         }
-
+        /*
         // add file uploader
         if ($useFileUpload) {
             $max_count = config('exment.document_upload_max_count', 5);
@@ -616,6 +619,7 @@ EOT;
 
             Admin::script($script);
         }
+        */
 
         $row->column(['xs' => 12, 'sm' => 6], (new Box(exmtrans("common.attachment"), $form))->style('info'));
     }
@@ -628,6 +632,7 @@ EOT;
         return getModelName(SystemTableName::COMMENT)
             ::where('parent_id', $this->custom_value->id)
             ->where('parent_type', $this->custom_table->table_name)
+            ->orderBy('updated_at', 'desc') // database sort reverse
             ->get();
     }
     
@@ -670,7 +675,8 @@ EOT;
             ->setWidth(12, 0);
         }
 
-        $row->column(['xs' => 12, 'sm' => 6], (new Box(exmtrans("common.comment"), $form))->style('info'));
+        // $row->column(['xs' => 12, 'sm' => 6], (new Box(exmtrans("common.comment"), $form))->style('info'));
+        $row->column(['xs' => 12, 'sm' => 12], (new Box(exmtrans("common.comment"), $form))->style('info'));
     }
     
     public function getWorkflowHistory()
@@ -891,5 +897,212 @@ EOT;
 
         $show_grid_type = $this->custom_form->getOption('show_grid_type') ?? ShowGridType::GRID;
         return isMatchString($show_grid_type, ShowGridType::GRID);
+    }
+
+    protected function setComboBox($row) {
+        $comments = $this->getComments();
+        $useComment = $this->useComment();
+        if (!$useComment) {
+            //$this->setDocumentBox($row);
+            return;
+        }
+
+        $documents = $this->getDocuments();
+        $useFileUpload = $this->useFileUpload();
+        if (count($documents) == 0 && !$useFileUpload) {
+            $this->setCommentBox($row);
+            return;
+        }
+
+        $form = new WidgetForm;
+        $form->disableReset();
+        $form->action(admin_urls('data', $this->custom_table->table_name, $this->custom_value->id, 'addcomment'));
+        $form->setWidth(10, 2);
+        /*
+        if (count($comments) > 0) {
+            $html = [];
+            foreach ($comments as $index => $comment) {
+                $html[] = "<div class='commentline'>" . view('exment::form.field.commentline', [
+                    'comment' => $comment,
+                    'table_name' => $this->custom_table->table_name,
+                    'isAbleRemove' => ($comment->created_user_id == \Exment::getUserId()),
+                    'deleteUrl' => admin_urls('data', $this->custom_table->table_name, $this->custom_value->id, 'deletecomment', $comment->suuid),
+                ])->render() . "</div>";
+            }
+            // loop and add as link
+            $form->html(implode("", $html))
+                ->plain()
+                ->setWidth(8, 3);
+        }
+
+        // show document list
+        if (count($documents) > 0) {
+            $html = [];
+            foreach ($documents as $index => $d) {
+                $html[] = "<p>" . view('exment::form.field.documentlink', [
+                    'document' => $d,
+                    'candelete' => $this->custom_value->enableDelete(true) === true,
+                ])->render() . "</p>";
+            }
+            // loop and add as link
+            $form->html(implode("", $html))
+                ->plain()
+                ->setWidth(8, 3);
+        }*/
+        
+        $form = $this->AddFileUploader($form);
+        $form = $this->AddCommentForm($form);
+
+        $hooter = $this->AddMergedList($comments, $documents);
+
+        $row->column(['xs' => 12, 'sm' => 12], (new Box(exmtrans("common.comment"), $form, $hooter))->style('info'));
+    }
+
+    protected function AddMergedList($comments, $documents) {
+        $form = new  WidgetForm;
+        $form->disableReset();
+        $form->disableSubmit();
+
+        if (count($comments) == 0) {
+            return $form;
+        }
+        // same as sort reverse
+        $doc_cnt = count($documents) -1; 
+        $html = [];
+        foreach ($comments as $index => $comment) {
+            // show document list
+            while($doc_cnt >= 0) {
+                $d = $documents[$doc_cnt];                    
+                if ($d->updated_at > $comment->updated_at){
+                    /*
+                    $fileId = "File No.#" . $doc_cnt. " ";
+                    $html[] = "<p>" . $fileId . view('exment::form.field.documentlink', [
+                        'document' => $d,
+                        'candelete' => $this->custom_value->enableDelete(true) === true,
+                    ])->render() . "</p>";
+
+                    // preview
+                    $fileName = array_get($d->value, 'document_name');
+                    $uuid = array_get($d->value, 'file_uuid');
+                    $file = ExmentFile::getUrl($uuid);
+                    if(preg_match('/\.gif$|\.png$|\.jpg$|\.jpeg$|\.bmp$/i', $fileName)) {
+                        $html[] = "<img src=".$file."></img><hr />";
+                    }*/
+                    $html = array_merge($html, $this->AddInlinePreview($d, $doc_cnt));
+                    $doc_cnt--;
+                } else { break; }
+            }
+            $commentId = "<div id='comment-" . (count($comments) - $index) . "'>Comment #" . (count($comments) - $index) . ": </div>";
+            $html[] = "<div class='commentline'>". $commentId . view('exment::form.field.commentline', [
+                'comment' => $comment,
+                'table_name' => $this->custom_table->table_name,
+                'isAbleRemove' => ($comment->created_user_id == \Exment::getUserId()),
+                'deleteUrl' => admin_urls('data', $this->custom_table->table_name, $this->custom_value->id, 'deletecomment', $comment->suuid),
+            ])->render() . "</div>";
+        }
+        // remain documents
+        while($doc_cnt >= 0) {
+            $d = $documents[$doc_cnt];
+            $html = array_merge($html, $this->AddInlinePreview($d, $doc_cnt));
+            $doc_cnt--;
+        }
+        
+        // loop and add as link
+        $form->html(implode("", $html))
+            ->plain()
+            ->setWidth(8, 3);
+
+        return $form;
+    }
+
+    protected function AddInlinePreview($doc, $cnt)
+    {
+        $html = [];
+        $fileId = "<div id='file-" . ($cnt + 1) . "'>File #" . ($cnt + 1). ": </div>";
+        $html[] = "<p>" . $fileId . view('exment::form.field.documentlink', [
+            'document' => $doc,
+            'candelete' => $this->custom_value->enableDelete(true) === true,
+        ])->render() . "</p>";
+
+        // preview
+        $fileName = array_get($doc->value, 'document_name');
+        $uuid = array_get($doc->value, 'file_uuid');
+        $file = ExmentFile::getUrl($uuid);
+        if(preg_match('/\.gif$|\.png$|\.jpg$|\.jpeg$|\.bmp$/i', $fileName)) {
+            $html[] = "<img src=".$file."></img><hr />";
+        }
+        return $html;
+    }
+
+    protected function AddCommentForm($form) {
+        // new comment
+        if ($this->custom_value->trashed()) {
+            $form->disableSubmit();
+        } else {
+            $form->textarea('comment', exmtrans("common.comment"))
+            ->rows(3)
+            ->required()
+            ->placeholder("Comment here...")
+            ->setLabelClass(['d-none'])
+            ->setWidth(12, 0);
+        }
+        return $form;
+    }
+
+    protected function AddFileUploader($form) {
+        $useFileUpload = $this->useFileUpload();
+
+        // add file uploader
+        if ($useFileUpload) {
+            $max_count = config('exment.document_upload_max_count', 5);
+            $label1 = exmtrans('common.message.file_drag_drop');
+            $label2 = exmtrans('custom_value.help.document_upload', ['max_size' => bytesToHuman(\Exment::getUploadMaxFileSize()), 'max_count' => $max_count]);
+            $custom_label = <<< EOT
+            $label1
+            <br>
+            ($label2)
+EOT;
+            $options = array_merge(Define::FILE_OPTION(), [
+                'showUpload' => true,
+                'showPreview' => true,
+                'showCancel' => false,
+                'uploadUrl' => admin_urls('data', $this->custom_table->table_name, $this->custom_value->id, 'fileupload'),
+                'uploadExtraData'=> [
+                    '_token' => csrf_token()
+                ],
+                'minFileCount' => 1,
+                'maxFileCount' => $max_count,
+                'dropZoneTitle' => $custom_label,
+            ]);
+
+            $input_id = 'file_data';
+
+            $form->multipleFile($input_id, trans('admin.upload'))
+                ->options($options)
+                ->setLabelClass(['d-none'])
+                #->help(exmtrans('custom_value.help.document_upload', ['max_size' => bytesToHuman(\Exment::getUploadMaxFileSize()), 'max_count' => $max_count]))
+                ->setWidth(12, 0);
+            $script = <<<EOT
+            var uploadCount = null;
+            $(".$input_id").on('filepreupload', function(event, data, previewId, index) {
+                if(uploadCount === null){
+                    uploadCount = data.files.length;
+                }
+            });
+            $(".$input_id").on('fileuploaded', function(e, params, fileId, index) {
+                uploadCount--;
+                console.log('upload uploadCount : ' + uploadCount);
+                console.log('upload index : ' + index);
+                if(0 >= uploadCount){
+                    $.pjax.reload('#pjax-container');
+                    $.form.submit();
+                }
+            });
+EOT;
+
+            Admin::script($script);
+        }
+        
+        return $form;
     }
 }
