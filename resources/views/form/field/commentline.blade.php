@@ -24,3 +24,5 @@
 <p class="commentline_inner">
 {!! replaceBreakEsc($comment->getLabel()) !!}
 </p>
+
+<hr />
