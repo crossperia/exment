@@ -13,7 +13,14 @@
 @endif
 </p>
 
+@if(count($mentions) > 0)
+<small class="text-muted">Mention To:&nbsp;
+    @foreach($mentions as $mention)
+    <b>&commat;{!! $mention["user_name"] !!} &nbsp;</b>
+    @endforeach
+</small>
+@endif
+
 <p class="commentline_inner">
 {!! replaceBreakEsc($comment->getLabel()) !!}
 </p>
-<hr />

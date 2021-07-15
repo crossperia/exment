@@ -69,6 +69,14 @@
                         "index_enabled": "1",
                         "freeword_search": "1"
                     }
+                },
+                {
+                    "column_name": "comment_mentions",
+                    "column_view_name": "Comment Mentions",
+                    "column_type": "textarea",
+                    "description": null,
+                    "system_flg": "1",
+                    "options": []
                 }
             ]
         },

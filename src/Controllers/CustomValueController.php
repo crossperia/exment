@@ -382,11 +382,20 @@ class CustomValueController extends AdminControllerTableBase
             return $response;
         }
         $comment = $request->get('comment');
+        
+        // mention
+        $mentions = $request->get('mentions');
+        $mentions = array_filter($mentions, function($val){ return ($val !== NULL);});
+        $mergedComment = [
+            'comment' => $comment,
+            'mentions' => $mentions
+        ];
+        //\Log::info($mergedComment);
 
         $show_item = $this->custom_form->show_item->id($id);
-        return $show_item->addComment($comment);
+        // return $show_item->addComment($comment);
+        return $show_item->addComment($mergedComment);
     }
-
 
     /**
      * remove comment.

@@ -249,6 +249,13 @@ class Notify extends ModelBase
                 continue;
             }
 
+            //temp users
+            if (isset($options['temp_users'])) {
+                foreach ($options['temp_users'] as $temp) {
+                    $users->add(NotifyTarget::getModelAsEmail($temp));    
+                }
+            }
+            
             $users = $this->uniqueUsers($users);
             foreach ($users as $user) {
                 if (!$this->approvalSendUser($mail_template, $custom_table, $custom_value, $user)) {

@@ -36,6 +36,7 @@ use Exceedone\Exment\Enums\ErrorCode;
 use Exceedone\Exment\Enums\NotifySavedType;
 use Exceedone\Exment\Enums\CustomOperationType;
 use Exceedone\Exment\Enums\ShowGridType;
+use Exceedone\Exment\Services\NotifyService;
 use Exceedone\Exment\Services\PartialCrudService;
 use Exceedone\Exment\ColumnItems\ItemInterface;
 
@@ -815,8 +816,11 @@ EOT;
     /**
      * add comment.
      */
-    public function addComment($comment)
+    public function addComment($mergedComment) // public function addComment($comment)
     {
+        $comment = $mergedComment['comment'];
+        $mentions = $mergedComment['mentions'];
+        
         if (!empty($comment)) {
             // save Comment Model
             $model = CustomTable::getEloquent(SystemTableName::COMMENT)->getValueModel();
@@ -824,12 +828,19 @@ EOT;
             $model->parent_type = $this->custom_table->table_name;
             $model->setValue([
                 'comment_detail' => $comment,
+                'comment_mentions' => json_encode($mentions),
             ]);
             $model->save();
                 
             // execute notify
             foreach ($this->custom_table->notifies as $notify) {
-                $notify->notifyCreateUpdateUser($this->custom_value, NotifySavedType::COMMENT, ['comment' => $comment]);
+                // insert mentions
+                if (count($mentions) > 0) {
+                    $notify->notifyCreateUpdateUser($this->custom_value, NotifySavedType::COMMENT, ['comment' => $comment, 'temp_users' => $mentions]);
+                } else {
+                    $notify->notifyCreateUpdateUser($this->custom_value, NotifySavedType::COMMENT, ['comment' => $comment]);
+                }
+                
             }
         }
 
@@ -918,47 +929,16 @@ EOT;
         $form->disableReset();
         $form->action(admin_urls('data', $this->custom_table->table_name, $this->custom_value->id, 'addcomment'));
         $form->setWidth(10, 2);
-        /*
-        if (count($comments) > 0) {
-            $html = [];
-            foreach ($comments as $index => $comment) {
-                $html[] = "<div class='commentline'>" . view('exment::form.field.commentline', [
-                    'comment' => $comment,
-                    'table_name' => $this->custom_table->table_name,
-                    'isAbleRemove' => ($comment->created_user_id == \Exment::getUserId()),
-                    'deleteUrl' => admin_urls('data', $this->custom_table->table_name, $this->custom_value->id, 'deletecomment', $comment->suuid),
-                ])->render() . "</div>";
-            }
-            // loop and add as link
-            $form->html(implode("", $html))
-                ->plain()
-                ->setWidth(8, 3);
-        }
 
-        // show document list
-        if (count($documents) > 0) {
-            $html = [];
-            foreach ($documents as $index => $d) {
-                $html[] = "<p>" . view('exment::form.field.documentlink', [
-                    'document' => $d,
-                    'candelete' => $this->custom_value->enableDelete(true) === true,
-                ])->render() . "</p>";
-            }
-            // loop and add as link
-            $form->html(implode("", $html))
-                ->plain()
-                ->setWidth(8, 3);
-        }*/
-        
-        $form = $this->AddFileUploader($form);
-        $form = $this->AddCommentForm($form);
+        $form = $this->addFileUploader($form);
+        $form = $this->addCommentForm($form);
 
-        $hooter = $this->AddMergedList($comments, $documents);
+        $footer = $this->addMergedList($comments, $documents);
 
-        $row->column(['xs' => 12, 'sm' => 12], (new Box(exmtrans("common.comment"), $form, $hooter))->style('info'));
+        $row->column(['xs' => 12, 'sm' => 12], (new Box(exmtrans("common.comment"), $form, $footer))->style('info'));
     }
 
-    protected function AddMergedList($comments, $documents) {
+    protected function addMergedList($comments, $documents) {
         $form = new  WidgetForm;
         $form->disableReset();
         $form->disableSubmit();
@@ -974,27 +954,23 @@ EOT;
             while($doc_cnt >= 0) {
                 $d = $documents[$doc_cnt];                    
                 if ($d->updated_at > $comment->updated_at){
-                    /*
-                    $fileId = "File No.#" . $doc_cnt. " ";
-                    $html[] = "<p>" . $fileId . view('exment::form.field.documentlink', [
-                        'document' => $d,
-                        'candelete' => $this->custom_value->enableDelete(true) === true,
-                    ])->render() . "</p>";
-
-                    // preview
-                    $fileName = array_get($d->value, 'document_name');
-                    $uuid = array_get($d->value, 'file_uuid');
-                    $file = ExmentFile::getUrl($uuid);
-                    if(preg_match('/\.gif$|\.png$|\.jpg$|\.jpeg$|\.bmp$/i', $fileName)) {
-                        $html[] = "<img src=".$file."></img><hr />";
-                    }*/
-                    $html = array_merge($html, $this->AddInlinePreview($d, $doc_cnt));
+                    $html = array_merge($html, $this->addInlinePreview($d, $doc_cnt));
                     $doc_cnt--;
                 } else { break; }
             }
             $commentId = "<div id='comment-" . (count($comments) - $index) . "'>Comment #" . (count($comments) - $index) . ": </div>";
-            $html[] = "<div class='commentline'>". $commentId . view('exment::form.field.commentline', [
+            
+            $mentions_data = json_decode($comment->getAttribute('value')['comment_mentions']);
+            $mentions = [];
+            
+            foreach ($mentions_data as $mention) {
+                $user = getModelName(SystemTableName::USER)::where('value->email', $mention)->first();
+                $mentions[] = $user->getAttribute('value');
+            }
+            
+            $html[] = '<div class="commentline">'. $commentId . view('exment::form.field.commentline', [
                 'comment' => $comment,
+                'mentions' => $mentions,
                 'table_name' => $this->custom_table->table_name,
                 'isAbleRemove' => ($comment->created_user_id == \Exment::getUserId()),
                 'deleteUrl' => admin_urls('data', $this->custom_table->table_name, $this->custom_value->id, 'deletecomment', $comment->suuid),
@@ -1003,7 +979,7 @@ EOT;
         // remain documents
         while($doc_cnt >= 0) {
             $d = $documents[$doc_cnt];
-            $html = array_merge($html, $this->AddInlinePreview($d, $doc_cnt));
+            $html = array_merge($html, $this->addInlinePreview($d, $doc_cnt));
             $doc_cnt--;
         }
         
@@ -1015,7 +991,7 @@ EOT;
         return $form;
     }
 
-    protected function AddInlinePreview($doc, $cnt)
+    protected function addInlinePreview($doc, $cnt)
     {
         $html = [];
         $fileId = "<div id='file-" . ($cnt + 1) . "'>File #" . ($cnt + 1). ": </div>";
@@ -1034,7 +1010,7 @@ EOT;
         return $html;
     }
 
-    protected function AddCommentForm($form) {
+    protected function addCommentForm($form) {
         // new comment
         if ($this->custom_value->trashed()) {
             $form->disableSubmit();
@@ -1045,11 +1021,45 @@ EOT;
             ->placeholder("Comment here...")
             ->setLabelClass(['d-none'])
             ->setWidth(12, 0);
+
+            // add system column
+            $columns = ['comment_mentions', 'comment_reactions'];
+            foreach ($columns as $key => $name) {
+                $column = CustomColumn::getEloquent($name, 2);
+                if (!isset($column)) {
+                    $obj_column = CustomColumn::firstOrNew([
+                        'custom_table_id' => 2,
+                        'column_name' => $name,
+                        'column_view_name' => str_replace("_", " ", ucfirst($name)),
+                        'column_type' => 'textarea',
+                        'description' => null,
+                        'system_flg' => 1,
+                        'options' => []
+                    ]);
+                    $obj_column->save();
+                }
+            }
+            
+            // user select options
+            $options = [];
+            $users = CustomTable::getEloquent(SystemTableName::USER)->getValueModel()->get();
+            foreach ($users as $key => $value) {
+                $user = $value->getAttribute('value');
+                $options[$user['email']] = $user['user_name'];
+            }
+            // print_r($options);
+            $form->multipleSelect('mentions')
+            ->options($options)
+            ->setLabelClass(['d-none'])
+            ->placeholder("Mention to...")
+            ->config('allowClear', false)
+            //->config('multiple', true)
+            ->setWidth(12, 0);
         }
         return $form;
     }
 
-    protected function AddFileUploader($form) {
+    protected function addFileUploader($form) {
         $useFileUpload = $this->useFileUpload();
 
         // add file uploader
