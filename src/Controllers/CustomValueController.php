@@ -420,7 +420,7 @@ class CustomValueController extends AdminControllerTableBase
         }
         $comment_id = $request->get('comment');
         $reaction_id = $request->get('reaction');
-        \Log::info($comment_id . ':' . $reaction_id);
+        //\Log::info($comment_id . ':' . $reaction_id);
 
         $show_item = $this->custom_form->show_item->id($id);
         return $show_item->addReaction($comment_id, $reaction_id);

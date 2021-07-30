@@ -885,8 +885,7 @@ EOT;
         $user_id = \Exment::user()->base_user_id;
         
         $model = CustomTable::getEloquent(SystemTableName::COMMENT)->getValueModel($comment_id);
-        $value = $model->getAttribute('value');
-        $reactions = json_decode(array_get($model->getAttribute('value'), 'comment_reactions'), true);
+        $reactions = json_decode(array_get($model->value, 'comment_reactions'), true);
 
         if ($reactions === null) {
             $reactions = array($user_id => $reaction_id);
@@ -902,6 +901,38 @@ EOT;
             'comment_reactions' => json_encode($reactions),
         ]);
         $model->save();
+
+        //notify
+        if ($reaction_id != '') {
+            $target_user = CustomTable::getEloquent('user')->getValueModel($model->created_user_id);
+            $url = admin_urls('data', $this->custom_table->table_name, $this->custom_value->id, "#comment-$comment_id");
+            $template = CustomTable::getEloquent('mail_template')->getValueModel()->where('value->mail_key_name', 'reaction_notify')->first();
+            if ($template !== null) {
+                $reaction_type = '';
+                $table = CustomTable::getEloquent('reactions');
+                if (isset($table)) {
+                    $reaction_data = $table->getValueModel()->where('value->name', $reaction_id)->first();
+                    $reaction_type = array_get($reaction_data->value, 'display_name');
+                }
+                
+                NotifyService::notifyNavbar([
+                    'mail_template' => $template,
+                    'user' => $target_user,
+                    'prms' => [
+                        'target_user' => array_get($target_user->value, 'user_name'),
+                        'target_datetime' => \Carbon\Carbon::now()->format('Y-m-d H:i:s'),
+                        'reaction_type' => $reaction_type,
+                        'url' => $url,
+                    ],
+                ]);
+            } else {
+                NotifyService::notifyNavbar([
+                    'subject' => 'Add reaction to your comment',
+                    'body' => 'Add reaction to your comment\nURL: ' . $url,
+                    'user' => $target_user,
+                ]);
+            } 
+        }
         
         return ($reactions);
     }
@@ -993,16 +1024,16 @@ EOT;
                     } else { break; }
                 }
 
-                $comment_header = "<div id='comment-" . (count($comments) - $index) . "'>Comment #" . (count($comments) - $index) . ": </div>";
+                $comment_header = "<div id='comment-" . $comment->id . "'>Comment #" . (count($comments) - $index) . ": </div>";
                 
                 // mentions
-                $mentions_data = json_decode(array_get($comment->getAttribute('value'), 'comment_mentions'));
+                $mentions_data = json_decode(array_get($comment->value, 'comment_mentions'));
                 $mentions = [];
                 
                 foreach ($mentions_data as $mention) {
                     $user = getModelName(SystemTableName::USER)::where('id', $mention)->first();
                     if ($user !== null) {
-                        $mentions[] = $user->getAttribute('value');
+                        $mentions[] = $user->value;
                     }
                 }
                 
@@ -1114,8 +1145,7 @@ EOT;
             $options = [];
             $users = CustomTable::getEloquent(SystemTableName::USER)->getValueModel()->get();
             foreach ($users as $key => $user) {
-                $value = $user->getAttribute('value');
-                $options[$user->id] = array_get($value,'user_name');
+                $options[$user->id] = array_get($user->value,'user_name');
             }
             //print_r($users);
             
@@ -1203,8 +1233,7 @@ EOT;
         $custom_reactions = getModelName('reactions')::query()->get();
         if ($custom_reactions !==null && count($custom_reactions) > 0) {
             foreach ($custom_reactions as $key => $value) {
-                $react = $value->getAttribute('value');
-
+                $react = $value->value;
                 $icon = array_get($react, 'icon');
                 if ($icon !== '') {
                     $react_types[array_get($react, 'name')] = array_get($react, 'display_name') . '&nbsp;<i class="fa fa-'. $icon .'"></i>';
@@ -1215,7 +1244,7 @@ EOT;
             //print_r($react_types);
         }
 
-        $reactions_data = json_decode(array_get($comment->getAttribute('value'), 'comment_reactions'), true);
+        $reactions_data = json_decode(array_get($comment->value, 'comment_reactions'), true);
         // print_r($reactions_data);
         
         foreach ($react_types as $key => $val) {
@@ -1224,15 +1253,14 @@ EOT;
         }
         $footer[] = '</ul>';
         if ($reactions_data !== null && count($reactions_data) > 0) {
-            $footer[] = '<button class="btn btn-xs btn-warning" data-toggle="collapse" data-target="#showReactions-'. $comment->id .'">Show/Hide Reaction(' . count($reactions_data) . ')</button>';
+            $footer[] = '<button tyle="button" class="btn btn-xs btn-warning" data-toggle="collapse" data-target="#showReactions-'. $comment->id .'">Show/Hide Reaction(' . count($reactions_data) . ')</button>';
             $footer[] = '</div>';
             $footer[] = '  <div class="collapse" id="showReactions-'. $comment->id .'"><div class="well"><ul>';
 
             foreach ($reactions_data as $key => $reaction) {
                 $user = getModelName(SystemTableName::USER)::where('id', $key)->first();
                 if ($user !== null) {
-                    $value = $user->getAttribute('value');
-                    $footer[] = '<li>' . array_get($value, 'user_name'). ' : '. array_get($react_types, $reaction) . '</li>';
+                    $footer[] = '<li>' . array_get($user->value, 'user_name'). ' : '. array_get($react_types, $reaction) . '</li>';
                 }
             }
             $footer[] = '</ul></div></div>';
