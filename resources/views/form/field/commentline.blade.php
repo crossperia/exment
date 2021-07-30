@@ -24,5 +24,5 @@
 <p class="commentline_inner">
 {!! replaceBreakEsc($comment->getLabel()) !!}
 </p>
-
+{!! $footer !!}
 <hr />

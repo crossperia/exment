@@ -410,6 +410,22 @@ class CustomValueController extends AdminControllerTableBase
         return $show_item->deleteComment($id, $suuid);
     }
 
+    /**
+     * add reaction.
+     */
+    public function addReaction(Request $request, $tableKey, $id)
+    {
+        if (($response = $this->firstFlow($request, CustomValuePageType::SHOW, $id)) instanceof Response) {
+            return $response;
+        }
+        $comment_id = $request->get('comment');
+        $reaction_id = $request->get('reaction');
+        \Log::info($comment_id . ':' . $reaction_id);
+
+        $show_item = $this->custom_form->show_item->id($id);
+        return $show_item->addReaction($comment_id, $reaction_id);
+    }
+
 
     /**
      * @param Request $request

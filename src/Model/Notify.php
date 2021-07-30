@@ -327,8 +327,13 @@ class Notify extends ModelBase
 
             //temp users
             if (isset($options['temp_users'])) {
-                foreach ($options['temp_users'] as $temp) {
-                    $users->add(NotifyTarget::getModelAsEmail($temp));    
+                foreach ($options['temp_users'] as $temp_id) {
+                    //$temp_user = CustomTable::getEloquent(SystemTableName::USER)->getValueModel($temp_id);
+                    $temp_user = getModelName(SystemTableName::USER)::where('id', $temp_id)->first();
+                    if ($temp_user !== null) {
+                        $users->add(NotifyTarget::getModelAsUser($temp_user));    
+                    }
+                    //$users->add(NotifyTarget::getModelAsEmail($temp));
                 }
             }
             

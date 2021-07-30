@@ -828,6 +828,11 @@ EOT;
         $comment = $mergedComment['comment'];
         $mentions = $mergedComment['mentions'];
         
+        $temp_users = array();
+        foreach ($mentions as $key => $user_id) {
+            $temp_users[] = CustomTable::getEloquent(SystemTableName::USER)->getValueModel($user_id);
+        }
+
         if (!empty($comment)) {
             // save Comment Model
             $model = CustomTable::getEloquent(SystemTableName::COMMENT)->getValueModel();
@@ -875,9 +880,37 @@ EOT;
             'toastr' => trans('admin.delete_succeeded'),
         ]);
     }
+
+    /**
+     * add reaction.
+     */
+    public function addReaction($comment_id, $reaction_id)
+    {
+        // Login user.
+        $user_id = \Exment::user()->base_user_id;
+        //$user_id = \Exment::getUserId();
+        $model = CustomTable::getEloquent(SystemTableName::COMMENT)->getValueModel($comment_id);
+        $value = $model->getAttribute('value');
+        $reactions = json_decode(array_get($model->getAttribute('value'), 'comment_reactions'), true);
+
+        if ($reactions === null) {
+            $reactions = array($user_id => $reaction_id);
+        } else {
+            if (array_key_exists($user_id, $reactions) && $reaction_id == '') { 
+                 unset($reactions[$user_id]);
+            } else {
+                $reactions[$user_id] = $reaction_id;
+            }
+        }
+        
+        $model->setValue([
+            'comment_reactions' => json_encode($reactions),
+        ]);
+        $model->save();
+        
+        return ($reactions);
+    }
     
-
-
     /**
      * Set ColumnItem's option to column item
      *
@@ -937,15 +970,15 @@ EOT;
         $form->action(admin_urls('data', $this->custom_table->table_name, $this->custom_value->id, 'addcomment'));
         $form->setWidth(10, 2);
 
-        $form = $this->addFileUploader($form);
-        $form = $this->addCommentForm($form);
+        $form = $this->setFileUploader($form);
+        $form = $this->setCommentForm($form);
 
-        $footer = $this->addMergedList($comments, $documents);
+        $footer = $this->setMergedList($comments, $documents);
 
         $row->column(['xs' => 12, 'sm' => 12], (new Box(exmtrans("common.comment"), $form, $footer))->style('info'));
     }
 
-    protected function addMergedList($comments, $documents) {
+    protected function setMergedList($comments, $documents) {
         $form = new  WidgetForm;
         $form->disableReset();
         $form->disableSubmit();
@@ -965,19 +998,74 @@ EOT;
                     $doc_cnt--;
                 } else { break; }
             }
-            $commentId = "<div id='comment-" . (count($comments) - $index) . "'>Comment #" . (count($comments) - $index) . ": </div>";
+
+            $comment_header = "<div id='comment-" . (count($comments) - $index) . "'>Comment #" . (count($comments) - $index) . ": </div>";
             
-            $mentions_data = json_decode($comment->getAttribute('value')['comment_mentions']);
+            // mentions
+            $mentions_data = json_decode(array_get($comment->getAttribute('value'), 'comment_mentions'));
             $mentions = [];
             
             foreach ($mentions_data as $mention) {
-                $user = getModelName(SystemTableName::USER)::where('value->email', $mention)->first();
-                $mentions[] = $user->getAttribute('value');
+                $user = getModelName(SystemTableName::USER)::where('id', $mention)->first();
+                if ($user !== null) {
+                    $mentions[] = $user->getAttribute('value');
+                }
             }
             
-            $html[] = '<div class="commentline">'. $commentId . view('exment::form.field.commentline', [
+            // reaction panel
+            $footer = array();
+            $footer[] = '<div class="btn-group">';
+            //$footer[] = '<button class="react_comment btn btn-xs btn-default" type="button" value="' . $comment->id . '">Like</button>';
+            $footer[] = '<button class="btn btn-xs  btn-default dropdown-toggle" type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Reaction</button>';
+            $footer[] = '<ul class="dropdown-menu" role="menu">';
+            $react_types = array(
+                '' => '[Clear]',
+                'like_it' => 'Like it!',
+                'got_it' => 'Got it!',
+                'confirmed' => 'Confirmed!'
+            );
+
+            $custom_reactions = getModelName('reactions')::query()->get();
+            if ($custom_reactions !==null && count($custom_reactions) > 0) {
+                foreach ($custom_reactions as $key => $value) {
+                    $react = $value->getAttribute('value');
+                    $react_types[array_get($react, 'name')] = array_get($react, 'display_name');
+                }
+                //print_r($react_types);
+            }
+
+            $reactions_data = json_decode(array_get($comment->getAttribute('value'), 'comment_reactions'), true);
+            // print_r($reactions_data);
+            
+            foreach ($react_types as $key => $val) {
+                $footer[] = '  <li class="dropdown-item btn btn-xs">' .
+                '<a href="#" class="react_comment" comment="' . $comment->id . '" reaction="' . $key . '">'. $val . '</a></li>';
+            }
+            $footer[] = '</ul>';
+            if ($reactions_data !== null && count($reactions_data) > 0) {
+                $footer[] = '<button class="btn btn-xs btn-warning" data-toggle="collapse" data-target="#showReactions">Show/Hide Reaction(' . count($reactions_data) . ')</button>';
+                $footer[] = '</div>';
+                $footer[] = '  <div class="collapse" id="showReactions"><div class="well">';
+
+                foreach ($reactions_data as $key => $reaction) {
+                    $user = getModelName(SystemTableName::USER)::where('id', $key)->first();
+                    if ($user !== null) {
+                        $value = $user->getAttribute('value');
+                        $footer[] = array_get($value, 'user_name'). ': "'. array_get($react_types, $reaction) . '"&nbsp;';
+                    }
+                }
+                $footer[] = '</div></div>';
+
+            } else {
+                $footer[] = '</div>';
+            }
+            
+            
+
+            $html[] = '<div class="commentline">'. $comment_header . view('exment::form.field.commentline', [
                 'comment' => $comment,
                 'mentions' => $mentions,
+                'footer' => implode("", $footer),
                 'table_name' => $this->custom_table->table_name,
                 'isAbleRemove' => ($comment->created_user_id == \Exment::getUserId()),
                 'deleteUrl' => admin_urls('data', $this->custom_table->table_name, $this->custom_value->id, 'deletecomment', $comment->suuid),
@@ -989,7 +1077,40 @@ EOT;
             $html = array_merge($html, $this->addInlinePreview($d, $doc_cnt));
             $doc_cnt--;
         }
-        
+
+        $putUrl = admin_urls('data', $this->custom_table->table_name, $this->custom_value->id, 'addreaction');
+        $script = <<<EOT
+        $(document).off('click', '.react_comment').on('click', '.react_comment', function(evt) {
+            evt.preventDefault();
+            // console.log(evt.target);
+            var comment_id = evt.target.attributes["comment"].value;
+            var reaction_id = evt.target.attributes["reaction"].value
+            alert("Reaction: " + comment_id + " - " + reaction_id);
+
+
+            return new Promise(function(resolve) {
+                $.ajax({
+                    method: 'put',
+                    url: '$putUrl',
+                    data: {
+                        comment: comment_id,
+                        reaction: reaction_id,
+                        _token:LA.token,
+                    },
+                    success: function (data) {
+                        console.log(data);
+                        resolve(data);
+                        location.reload();
+                    }
+                });
+            });
+
+
+        });
+        EOT;
+
+        Admin::script($script);
+
         // loop and add as link
         $form->html(implode("", $html))
             ->plain()
@@ -1017,7 +1138,7 @@ EOT;
         return $html;
     }
 
-    protected function addCommentForm($form) {
+    protected function setCommentForm($form) {
         // new comment
         if ($this->custom_value->trashed()) {
             $form->disableSubmit();
@@ -1050,11 +1171,12 @@ EOT;
             // user select options
             $options = [];
             $users = CustomTable::getEloquent(SystemTableName::USER)->getValueModel()->get();
-            foreach ($users as $key => $value) {
-                $user = $value->getAttribute('value');
-                $options[$user['email']] = $user['user_name'];
+            foreach ($users as $key => $user) {
+                $value = $user->getAttribute('value');
+                $options[$user->id] = array_get($value,'user_name');
             }
-            // print_r($options);
+            //print_r($users);
+            
             $form->multipleSelect('mentions')
             ->options($options)
             ->setLabelClass(['d-none'])
@@ -1066,7 +1188,7 @@ EOT;
         return $form;
     }
 
-    protected function addFileUploader($form) {
+    protected function setFileUploader($form) {
         $useFileUpload = $this->useFileUpload();
 
         // add file uploader

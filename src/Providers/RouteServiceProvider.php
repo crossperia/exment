@@ -180,6 +180,8 @@ class RouteServiceProvider extends ServiceProvider
             $router->post("data/{tableKey}/{id}/fileupload", 'CustomValueController@fileupload');
             $router->post("data/{tableKey}/{id}/addcomment", 'CustomValueController@addComment');
             $router->delete("data/{tableKey}/{id}/deletecomment/{suuid}", 'CustomValueController@deleteComment');
+            
+            $router->put("data/{tableKey}/{id}/addreaction", 'CustomValueController@addReaction');
 
             $router->get("view/{tableKey}/filter-condition", 'CustomViewController@getFilterCondition');
             $router->get("view/{tableKey}/summary-condition", 'CustomViewController@getSummaryCondition');
