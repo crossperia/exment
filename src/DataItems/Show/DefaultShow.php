@@ -640,7 +640,7 @@ EOT;
         return getModelName(SystemTableName::COMMENT)
             ::where('parent_id', $this->custom_value->id)
             ->where('parent_type', $this->custom_table->table_name)
-            ->orderBy('updated_at', 'desc') // database sort reverse
+            ->orderBy('created_at', 'desc') // database sort reverse
             ->get();
     }
     
@@ -983,133 +983,90 @@ EOT;
         $form->disableReset();
         $form->disableSubmit();
 
-        if (count($comments) == 0) {
-            return $form;
-        }
+        //if (count($comments) == 0) {
+        //    return $form;
+        //}
+
         // same as sort reverse
         $doc_cnt = count($documents) -1; 
         $html = [];
-        foreach ($comments as $index => $comment) {
-            // show document list
-            while($doc_cnt >= 0) {
-                $d = $documents[$doc_cnt];                    
-                if ($d->updated_at > $comment->updated_at){
-                    $html = array_merge($html, $this->addInlinePreview($d, $doc_cnt));
-                    $doc_cnt--;
-                } else { break; }
-            }
 
-            $comment_header = "<div id='comment-" . (count($comments) - $index) . "'>Comment #" . (count($comments) - $index) . ": </div>";
-            
-            // mentions
-            $mentions_data = json_decode(array_get($comment->getAttribute('value'), 'comment_mentions'));
-            $mentions = [];
-            
-            foreach ($mentions_data as $mention) {
-                $user = getModelName(SystemTableName::USER)::where('id', $mention)->first();
-                if ($user !== null) {
-                    $mentions[] = $user->getAttribute('value');
+        if (count($comments) > 0) {
+            foreach ($comments as $index => $comment) {
+                // show document list
+                while($doc_cnt >= 0) {
+                    $d = $documents[$doc_cnt];                    
+                    if ($d->created_at > $comment->created_at){
+                        $html = array_merge($html, $this->setInlinePreview($d, $doc_cnt));
+                        $doc_cnt--;
+                    } else { break; }
                 }
-            }
-            
-            // reaction panel
-            $footer = array();
-            $footer[] = '<div class="btn-group">';
-            //$footer[] = '<button class="react_comment btn btn-xs btn-default" type="button" value="' . $comment->id . '">Like</button>';
-            $footer[] = '<button class="btn btn-xs  btn-default dropdown-toggle" type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Reaction</button>';
-            $footer[] = '<ul class="dropdown-menu" role="menu">';
-            $react_types = array(
-                '' => '[Clear]',
-                'like_it' => 'Like it!',
-                'got_it' => 'Got it!',
-                'confirmed' => 'Confirmed!'
-            );
 
-            $custom_reactions = getModelName('reactions')::query()->get();
-            if ($custom_reactions !==null && count($custom_reactions) > 0) {
-                foreach ($custom_reactions as $key => $value) {
-                    $react = $value->getAttribute('value');
-                    $react_types[array_get($react, 'name')] = array_get($react, 'display_name');
-                }
-                //print_r($react_types);
-            }
-
-            $reactions_data = json_decode(array_get($comment->getAttribute('value'), 'comment_reactions'), true);
-            // print_r($reactions_data);
-            
-            foreach ($react_types as $key => $val) {
-                $footer[] = '  <li class="dropdown-item btn btn-xs">' .
-                '<a href="#" class="react_comment" comment="' . $comment->id . '" reaction="' . $key . '">'. $val . '</a></li>';
-            }
-            $footer[] = '</ul>';
-            if ($reactions_data !== null && count($reactions_data) > 0) {
-                $footer[] = '<button class="btn btn-xs btn-warning" data-toggle="collapse" data-target="#showReactions">Show/Hide Reaction(' . count($reactions_data) . ')</button>';
-                $footer[] = '</div>';
-                $footer[] = '  <div class="collapse" id="showReactions"><div class="well">';
-
-                foreach ($reactions_data as $key => $reaction) {
-                    $user = getModelName(SystemTableName::USER)::where('id', $key)->first();
+                $comment_header = "<div id='comment-" . (count($comments) - $index) . "'>Comment #" . (count($comments) - $index) . ": </div>";
+                
+                // mentions
+                $mentions_data = json_decode(array_get($comment->getAttribute('value'), 'comment_mentions'));
+                $mentions = [];
+                
+                foreach ($mentions_data as $mention) {
+                    $user = getModelName(SystemTableName::USER)::where('id', $mention)->first();
                     if ($user !== null) {
-                        $value = $user->getAttribute('value');
-                        $footer[] = array_get($value, 'user_name'). ': "'. array_get($react_types, $reaction) . '"&nbsp;';
+                        $mentions[] = $user->getAttribute('value');
                     }
                 }
-                $footer[] = '</div></div>';
-
-            } else {
-                $footer[] = '</div>';
+                
+                $footer = $this->setReactionFooter($comment);
+                
+                $html[] = '<div class="commentline">'. $comment_header . view('exment::form.field.commentline', [
+                    'comment' => $comment,
+                    'mentions' => $mentions,
+                    'footer' => implode("", $footer),
+                    'table_name' => $this->custom_table->table_name,
+                    'isAbleRemove' => ($comment->created_user_id == \Exment::getUserId()),
+                    'deleteUrl' => admin_urls('data', $this->custom_table->table_name, $this->custom_value->id, 'deletecomment', $comment->suuid),
+                ])->render() . "</div>";
             }
             
-            
+            $putUrl = admin_urls('data', $this->custom_table->table_name, $this->custom_value->id, 'addreaction');
+            $script = <<<EOT
+            $(document).off('click', '.react_comment').on('click', '.react_comment', function(evt) {
+                evt.preventDefault();
+                // console.log(evt.target);
+                var comment_id = evt.target.attributes["comment"].value;
+                var reaction_id = evt.target.attributes["reaction"].value
+                // alert("Reaction: " + comment_id + " - " + reaction_id);
 
-            $html[] = '<div class="commentline">'. $comment_header . view('exment::form.field.commentline', [
-                'comment' => $comment,
-                'mentions' => $mentions,
-                'footer' => implode("", $footer),
-                'table_name' => $this->custom_table->table_name,
-                'isAbleRemove' => ($comment->created_user_id == \Exment::getUserId()),
-                'deleteUrl' => admin_urls('data', $this->custom_table->table_name, $this->custom_value->id, 'deletecomment', $comment->suuid),
-            ])->render() . "</div>";
+
+                return new Promise(function(resolve) {
+                    $.ajax({
+                        method: 'put',
+                        url: '$putUrl',
+                        data: {
+                            comment: comment_id,
+                            reaction: reaction_id,
+                            _token:LA.token,
+                        },
+                        success: function (data) {
+                            console.log(data);
+                            resolve(data);
+                            location.reload();
+                        }
+                    });
+                });
+
+
+            });
+            EOT;
+
+            Admin::script($script);
+
         }
         // remain documents
         while($doc_cnt >= 0) {
             $d = $documents[$doc_cnt];
-            $html = array_merge($html, $this->addInlinePreview($d, $doc_cnt));
+            $html = array_merge($html, $this->setInlinePreview($d, $doc_cnt));
             $doc_cnt--;
         }
-
-        $putUrl = admin_urls('data', $this->custom_table->table_name, $this->custom_value->id, 'addreaction');
-        $script = <<<EOT
-        $(document).off('click', '.react_comment').on('click', '.react_comment', function(evt) {
-            evt.preventDefault();
-            // console.log(evt.target);
-            var comment_id = evt.target.attributes["comment"].value;
-            var reaction_id = evt.target.attributes["reaction"].value
-            alert("Reaction: " + comment_id + " - " + reaction_id);
-
-
-            return new Promise(function(resolve) {
-                $.ajax({
-                    method: 'put',
-                    url: '$putUrl',
-                    data: {
-                        comment: comment_id,
-                        reaction: reaction_id,
-                        _token:LA.token,
-                    },
-                    success: function (data) {
-                        console.log(data);
-                        resolve(data);
-                        location.reload();
-                    }
-                });
-            });
-
-
-        });
-        EOT;
-
-        Admin::script($script);
 
         // loop and add as link
         $form->html(implode("", $html))
@@ -1119,7 +1076,7 @@ EOT;
         return $form;
     }
 
-    protected function addInlinePreview($doc, $cnt)
+    protected function setInlinePreview($doc, $cnt)
     {
         $html = [];
         $fileId = "<div id='file-" . ($cnt + 1) . "'>File #" . ($cnt + 1). ": </div>";
@@ -1243,5 +1200,63 @@ EOT;
         }
         
         return $form;
+    }
+
+    protected function setReactionFooter($comment) {
+        // reaction panel
+        $footer = array();
+        $footer[] = '<div class="btn-group">';
+        //$footer[] = '<button class="react_comment btn btn-xs btn-default" type="button" value="' . $comment->id . '">Like</button>';
+        $footer[] = '<button class="btn btn-xs  btn-default dropdown-toggle" type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Reaction</button>';
+        $footer[] = '<ul class="dropdown-menu" role="menu">';
+        $react_types = array(
+            '' => '[Clear]',
+            'like_it' => 'Like it!',
+            'got_it' => 'Got it!',
+            'confirmed' => 'Confirmed!'
+        );
+
+        $custom_reactions = getModelName('reactions')::query()->get();
+        if ($custom_reactions !==null && count($custom_reactions) > 0) {
+            foreach ($custom_reactions as $key => $value) {
+                $react = $value->getAttribute('value');
+
+                $icon = array_get($react, 'icon');
+                if ($icon !== '') {
+                    $react_types[array_get($react, 'name')] = array_get($react, 'display_name') . '&nbsp;<i class="fa fa-'. $icon .'"></i>';
+                } else {
+                    $react_types[array_get($react, 'name')] = array_get($react, 'display_name');   
+                }
+            }
+            //print_r($react_types);
+        }
+
+        $reactions_data = json_decode(array_get($comment->getAttribute('value'), 'comment_reactions'), true);
+        // print_r($reactions_data);
+        
+        foreach ($react_types as $key => $val) {
+            $footer[] = '  <li class="dropdown-item btn btn-xs">' .
+            '<a href="#" class="react_comment" comment="' . $comment->id . '" reaction="' . $key . '">'. $val . '</a></li>';
+        }
+        $footer[] = '</ul>';
+        if ($reactions_data !== null && count($reactions_data) > 0) {
+            $footer[] = '<button class="btn btn-xs btn-warning" data-toggle="collapse" data-target="#showReactions-'. $comment->id .'">Show/Hide Reaction(' . count($reactions_data) . ')</button>';
+            $footer[] = '</div>';
+            $footer[] = '  <div class="collapse" id="showReactions-'. $comment->id .'"><div class="well"><ul>';
+
+            foreach ($reactions_data as $key => $reaction) {
+                $user = getModelName(SystemTableName::USER)::where('id', $key)->first();
+                if ($user !== null) {
+                    $value = $user->getAttribute('value');
+                    $footer[] = '<li>' . array_get($value, 'user_name'). ' : '. array_get($react_types, $reaction) . '</li>';
+                }
+            }
+            $footer[] = '</ul></div></div>';
+
+        } else {
+            $footer[] = '</div>';
+        }
+
+        return $footer;
     }
 }
