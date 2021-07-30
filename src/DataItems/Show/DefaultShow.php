@@ -825,13 +825,8 @@ EOT;
      */
     public function addComment($mergedComment) // public function addComment($comment)
     {
-        $comment = $mergedComment['comment'];
-        $mentions = $mergedComment['mentions'];
-        
-        $temp_users = array();
-        foreach ($mentions as $key => $user_id) {
-            $temp_users[] = CustomTable::getEloquent(SystemTableName::USER)->getValueModel($user_id);
-        }
+        $comment = array_get($mergedComment, 'comment');
+        $mentions = array_get($mergedComment, 'mentions');
 
         if (!empty($comment)) {
             // save Comment Model
@@ -888,7 +883,7 @@ EOT;
     {
         // Login user.
         $user_id = \Exment::user()->base_user_id;
-        //$user_id = \Exment::getUserId();
+        
         $model = CustomTable::getEloquent(SystemTableName::COMMENT)->getValueModel($comment_id);
         $value = $model->getAttribute('value');
         $reactions = json_decode(array_get($model->getAttribute('value'), 'comment_reactions'), true);
@@ -983,10 +978,6 @@ EOT;
         $form->disableReset();
         $form->disableSubmit();
 
-        //if (count($comments) == 0) {
-        //    return $form;
-        //}
-
         // same as sort reverse
         $doc_cnt = count($documents) -1; 
         $html = [];
@@ -1031,12 +1022,8 @@ EOT;
             $script = <<<EOT
             $(document).off('click', '.react_comment').on('click', '.react_comment', function(evt) {
                 evt.preventDefault();
-                // console.log(evt.target);
                 var comment_id = evt.target.attributes["comment"].value;
                 var reaction_id = evt.target.attributes["reaction"].value
-                // alert("Reaction: " + comment_id + " - " + reaction_id);
-
-
                 return new Promise(function(resolve) {
                     $.ajax({
                         method: 'put',
@@ -1053,8 +1040,6 @@ EOT;
                         }
                     });
                 });
-
-
             });
             EOT;
 
@@ -1206,7 +1191,6 @@ EOT;
         // reaction panel
         $footer = array();
         $footer[] = '<div class="btn-group">';
-        //$footer[] = '<button class="react_comment btn btn-xs btn-default" type="button" value="' . $comment->id . '">Like</button>';
         $footer[] = '<button class="btn btn-xs  btn-default dropdown-toggle" type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Reaction</button>';
         $footer[] = '<ul class="dropdown-menu" role="menu">';
         $react_types = array(
