@@ -224,8 +224,8 @@ class TemplateController extends AdminControllerBase
         $form->hidden('_token')->default(csrf_token());
 
         // import template with a new name
-        $form->text('new_name')
-            ->placeholder('if you need a new name');
+        $form->text('name_suffix')
+            ->placeholder('if you need a new name suffix');
         $form->radio('is_clone', 'Clone if exists')
             ->options([1=>'Yes', 2=>'No'])
             ->default(2);
@@ -274,12 +274,12 @@ class TemplateController extends AdminControllerBase
             $importer->importTemplate($request->input('template'));
         }
         */
-        $newName = $request->get('new_name');
+        $nameSuffix = $request->get('name_suffix');
         $isClone = $request->get('is_clone');
         if ($request->has('template')) {
             $importer = new TemplateImportExport\TemplateImporter;
             $template = $request->input('template');
-            $importer->importTemplate($template, $newName);
+            $importer->importTemplate($template, $nameSuffix);
         }
 
         admin_toastr(trans('admin.save_succeeded'));
