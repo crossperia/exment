@@ -46,7 +46,7 @@ class TemplateImporter
     /**
      * Import template (from display. select item)
      */
-    public function importTemplate($importKeys, $newName = null) //public function importTemplate($importKeys)
+    public function importTemplate($importKeys, $nameSuffix = null) //public function importTemplate($importKeys)
     {
         try {
             $importKeys = (array)$importKeys;
@@ -80,7 +80,7 @@ class TemplateImporter
                     }
                     $this->importFromFile(File::get($path), [
                         'basePath' => "$templates_path/$templateName",
-                        'newName' => $newName,
+                        'nameSuffix' => $nameSuffix,
                     ]);
                 }
 
@@ -96,7 +96,7 @@ class TemplateImporter
                             
                     $this->importFromFile(File::get($path), [
                         'basePath' => path_join($this->diskService->localSyncDiskItem()->dirFullPath(), $templateName),
-                        'newName' => $newName,
+                        'nameSuffix' => $nameSuffix,
                     ]);
                 }
             }
@@ -568,20 +568,43 @@ class TemplateImporter
 
         $json = $this->getMergeJson($jsonString, $options);
         
-        $newName = $options['newName'];
-        if ($newName != null) {
+        $nameSuffix = $options['nameSuffix'];
+        if ($nameSuffix != null) {
             foreach (array_get($json, 'custom_tables') as $key => $value) {
-                array_set($json, 'custom_tables.' . $key . '.table_name', $newName);    
+                $newName = array_get($json, 'custom_tables.' . $key . '.table_name') . "_" . $nameSuffix;
+                array_set($json, 'custom_tables.' . $key . '.table_name', $newName);
+                $newTitle = array_get($json, 'custom_tables.' . $key . '.table_view_name') . " " . $nameSuffix;
+                array_set($json, 'custom_tables.' . $key . '.title', $newTitle);
             }
 
             foreach (array_get($json, 'custom_forms') as $key => $value) {
+                $newName = array_get($json, 'custom_forms.' . $key . '.table_name') . "_" . $nameSuffix;
                 array_set($json, 'custom_forms.' . $key . '.table_name', $newName);
                 array_forget($json, 'custom_forms.' . $key . '.suuid');    
             }
 
             foreach (array_get($json, 'custom_views') as $key => $value) {
+                $newName = array_get($json, 'custom_views.' . $key . '.table_name') . "_" . $nameSuffix;
                 array_set($json, 'custom_views.' . $key . '.table_name', $newName);
                 array_forget($json, 'custom_views.' . $key . '.suuid');    
+            }
+
+            foreach (array_get($json, 'custom_relations') as $key => $value) {
+                $newName1 = array_get($json, 'custom_relations.' . $key . '.parent_custom_table_name') . "_" . $nameSuffix;
+                array_set($json, 'custom_relations.' . $key . '.parent_custom_table_name', $newName1);
+                $newName2 = array_get($json, 'custom_relations.' . $key . '.child_custom_table_name') . "_" . $nameSuffix;
+                array_set($json, 'custom_relations.' . $key . '.child_custom_table_name', $newName2);
+            }
+
+            foreach (array_get($json, 'admin_menu') as $key => $value) {
+                $target = array_get($json, 'admin_menu.' . $key . '.menu_target_name');
+                if ($target != null) {
+                    $newName = $target . "_" . $nameSuffix;
+                    array_set($json, 'admin_menu.' . $key . '.menu_target_name', $newName);
+                    array_set($json, 'admin_menu.' . $key . '.menu_name', $newName);
+                    $newTitle = array_get($json, 'admin_menu.' . $key . '.title') . " " . $nameSuffix;
+                    array_set($json, 'admin_menu.' . $key . '.title', $newTitle);
+                }
             }
         }
         $this->import($json, $system_flg, $is_update);
