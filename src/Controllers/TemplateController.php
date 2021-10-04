@@ -223,6 +223,13 @@ class TemplateController extends AdminControllerBase
         $this->addTemplateTile($form);
         $form->hidden('_token')->default(csrf_token());
 
+        // import template with a new name
+        $form->text('new_name')
+            ->placeholder('if you need a new name');
+        $form->radio('is_clone', 'Clone if exists')
+            ->options([1=>'Yes', 2=>'No'])
+            ->default(2);
+
         $content->row((new Box(exmtrans('template.header_import'), $form))->style('info'));
     }
 
@@ -260,11 +267,19 @@ class TemplateController extends AdminControllerBase
         
         // upload template file and install
         $this->uploadTemplate($request);
-
+        /*
         // install templates selected tiles.
         if ($request->has('template')) {
             $importer = new TemplateImportExport\TemplateImporter;
             $importer->importTemplate($request->input('template'));
+        }
+        */
+        $newName = $request->get('new_name');
+        $isClone = $request->get('is_clone');
+        if ($request->has('template')) {
+            $importer = new TemplateImportExport\TemplateImporter;
+            $template = $request->input('template');
+            $importer->importTemplate($template, $newName);
         }
 
         admin_toastr(trans('admin.save_succeeded'));

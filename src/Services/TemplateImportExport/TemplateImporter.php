@@ -46,7 +46,7 @@ class TemplateImporter
     /**
      * Import template (from display. select item)
      */
-    public function importTemplate($importKeys)
+    public function importTemplate($importKeys, $newName = null) //public function importTemplate($importKeys)
     {
         try {
             $importKeys = (array)$importKeys;
@@ -80,6 +80,7 @@ class TemplateImporter
                     }
                     $this->importFromFile(File::get($path), [
                         'basePath' => "$templates_path/$templateName",
+                        'newName' => $newName,
                     ]);
                 }
 
@@ -95,6 +96,7 @@ class TemplateImporter
                             
                     $this->importFromFile(File::get($path), [
                         'basePath' => path_join($this->diskService->localSyncDiskItem()->dirFullPath(), $templateName),
+                        'newName' => $newName,
                     ]);
                 }
             }
@@ -564,8 +566,24 @@ class TemplateImporter
         $is_update = $options['is_update'];
         $basePath = $options['basePath'];
 
-
         $json = $this->getMergeJson($jsonString, $options);
+        
+        $newName = $options['newName'];
+        if ($newName != null) {
+            foreach (array_get($json, 'custom_tables') as $key => $value) {
+                array_set($json, 'custom_tables.' . $key . '.table_name', $newName);    
+            }
+
+            foreach (array_get($json, 'custom_forms') as $key => $value) {
+                array_set($json, 'custom_forms.' . $key . '.table_name', $newName);
+                array_forget($json, 'custom_forms.' . $key . '.suuid');    
+            }
+
+            foreach (array_get($json, 'custom_views') as $key => $value) {
+                array_set($json, 'custom_views.' . $key . '.table_name', $newName);
+                array_forget($json, 'custom_views.' . $key . '.suuid');    
+            }
+        }
         $this->import($json, $system_flg, $is_update);
 
         if (!$is_update) {
