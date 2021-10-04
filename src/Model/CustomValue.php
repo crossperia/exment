@@ -1696,9 +1696,11 @@ abstract class CustomValue extends ModelBase
             return ErrorCode::WORKFLOW_LOCK();
         }
 
+        /* [Request]Exclude if relational parent is read only
         if (!is_null($parent_value = $this->getParentValue()) && ($code = $parent_value->enableEdit($checkFormAction)) !== true) {
             return $code;
         }
+        */
 
         if ($this->trashed()) {
             return ErrorCode::ALREADY_DELETED();
@@ -1735,10 +1737,11 @@ abstract class CustomValue extends ModelBase
         if (method_exists($this, 'disabled_delete_trait') && $this->disabled_delete_trait()) {
             return ErrorCode::DELETE_DISABLED();
         }
-        
+        /* [Request]Exclude if relational parent is read only
         if (!is_null($parent_value = $this->getParentValue()) && ($code = $parent_value->enableDelete($checkFormAction)) !== true) {
             return $code;
         }
+        */
 
         return true;
     }

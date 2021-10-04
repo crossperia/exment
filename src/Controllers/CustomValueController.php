@@ -385,7 +385,12 @@ class CustomValueController extends AdminControllerTableBase
         
         // mention
         $mentions = $request->get('mentions');
-        $mentions = array_filter($mentions, function($val){ return ($val !== NULL);});
+        if ($mentions !== NULL) {
+            $mentions = array_filter($mentions, function($val){ return ($val !== NULL);});
+        } else {
+            $mentions = array();
+        }
+        
         $mergedComment = [
             'comment' => $comment,
             'mentions' => $mentions

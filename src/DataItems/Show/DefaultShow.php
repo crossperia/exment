@@ -146,11 +146,12 @@ class DefaultShow extends ShowBase
                 if ($this->custom_table->enableView(true) !== true) {
                     $tools->disableList();
                 }
-
+                /* [Request]Exclude if relational parent is read only
                 if (!is_null($parent_value = $this->custom_value->getParentValue()) && $parent_value->enableEdit(true) !== true) {
                     $tools->disableEdit();
                     $tools->disableDelete();
                 }
+                */
 
                 if ($this->modal) {
                     $tools->disableList();
@@ -534,9 +535,11 @@ EOT;
     protected function useFileUpload()
     {
         // if no permission, return
+        /* [Request]Exclude if relational parent is read only
         if ($this->custom_value->enableEdit() !== true) {
             return false;
         }
+        */
         
         return !$this->modal && boolval($this->custom_table->getOption('attachment_flg') ?? true);
     }
@@ -985,11 +988,12 @@ EOT;
         }
 
         $documents = $this->getDocuments();
+        /*
         $useFileUpload = $this->useFileUpload();
         if (count($documents) == 0 && !$useFileUpload) {
             $this->setCommentBox($row);
             return;
-        }
+        }*/
 
         $form = new WidgetForm;
         $form->disableReset();
@@ -1230,13 +1234,13 @@ EOT;
             'confirmed' => 'Confirmed!'
         );
 
-        $custom_reactions = getModelName('reactions')::query()->get();
+        $custom_reactions = getModelName('reaction')::query()->get();
         if ($custom_reactions !==null && count($custom_reactions) > 0) {
             foreach ($custom_reactions as $key => $value) {
                 $react = $value->value;
                 $icon = array_get($react, 'icon');
                 if ($icon !== '') {
-                    $react_types[array_get($react, 'name')] = array_get($react, 'display_name') . '&nbsp;<i class="fa fa-'. $icon .'"></i>';
+                    $react_types[array_get($react, 'name')] = array_get($react, 'display_name') . '&nbsp;<i class="fa '. $icon .'"></i>';
                 } else {
                     $react_types[array_get($react, 'name')] = array_get($react, 'display_name');   
                 }
